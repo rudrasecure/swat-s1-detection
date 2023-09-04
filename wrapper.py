@@ -1,3 +1,4 @@
+import select
 import subprocess
 import pandas as pd
 import numpy as np
@@ -32,7 +33,7 @@ class Detector:
 
     def __init__(self):
         self.autoencoder = load_model("model.h5")
-        self.threshold = 0.85 # threshold can be adjusted based on required sensitivity level
+        self.threshold = 0.64 # threshold can be adjusted based on required sensitivity level
 
     def detector(self, data):
         data=data.drop(labels=["Time"],axis=1)
@@ -51,19 +52,17 @@ class Detector:
         else:
             return True
 
-oldLine = []
 # initialize the detector outside the loop
 detect = Detector()
+f = subprocess.Popen(['tail','-n', '+1', '-F', '../examples/swat-s1/logs/data.csv'], stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+p = select.poll()
+p.register(f.stdout)
+
 
 while True:
-    # Read the last line of the log file.
-    line = readLastLine("/home/mukesh/minicps/examples/swat-s1/logs/data.csv")
-    lineMod = line.split(",")
-    if oldLine!=lineMod[1:]:
-        oldLine=lineMod[1:]
+    if p.poll(1):
+        line = f.stdout.readline().decode('utf-8')
+        lineMod = line.split(",")
         data = convertToDF(lineMod)
         if detect.alarm(detect.detector(data)):
             alertGenerator(data)
-
-    # Sleep for a short interval before checking again (adjust as needed).
-    time.sleep(1)
